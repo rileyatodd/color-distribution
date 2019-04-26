@@ -6,7 +6,7 @@
   (:gen-class))
 
 (q/defsketch first-sketch
-  :title "You spin my circle right round"
+  :title "Testing 1 2"
   :size [500 500]
   ; setup function called only once, during sketch initialization.
   :setup dynamic/setup

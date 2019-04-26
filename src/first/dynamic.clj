@@ -43,15 +43,19 @@
 (defn in-range [x start end]
   (and (< start x) (< x end)))
 
+(defn min-angle [angle]
+  (cond ; There's probably a more natural way to do this with mod
+    (> angle 128) (- angle 256)
+    (< angle -128) (+ angle 256)
+    :else angle))
+
 (defn diff-from-opp-hue [h0 h1]
   (let [target-hue (mod (+ h1 128) 255)
         diff (- target-hue h0)]
-    #_(when (< diff -128)
-      (println (format "%1$.0f" h0) (format "%1$.0f" h1)))
-    (cond ; There's probably a more natural way to do this with mod
-      (> diff 128) (- diff 256)
-      (< diff -128) (+ diff 256)
-      :else diff)))
+    (min-angle diff)))
+
+(defn hue-diff [h0 h1]
+  (min-angle (- h0 h1)))
 
 (defn logistic-curve [max-val growth mid-x]
   #(/ max-val (+ 1 (expt Math/E (- (* growth (- % mid-x)))))))
@@ -72,15 +76,6 @@
         scaled-adjustment (rescale adjustment
                                    -128 128
                                    (- max-hue-rate) max-hue-rate)]
-    (when (< 2000 (Math/abs adjustment))
-      #_(println hue-diffs)
-      #_(println (map #(into [] %1 %2) (map :hue other-points) hue-diffs)))
-    
-    (when (< (q/random 100) 0.9)
-      #_(println "hue0" (format "%1$.0f" hue0) \tab \tab 
-               "adjustment" (format "%1$.0f" adjustment) \tab
-               "scaled-adjustment" (format "%1$.2f" scaled-adjustment))
-      (swap! hue-adj-samples #(cons [hue0 scaled-adjustment] %)))
     scaled-adjustment))
 
 (defn update-physics [point]
@@ -104,13 +99,14 @@
 (defn update-points [points]
   "calculate new point positions based on update rule"
   (map (fn [point]
-         (let [{p :p v :v} (if (:physics @play-state) (update-physics point) point)
-               hue-nudge (if (:color @play-state) (adjust-hue point points) 0)]
+         (let [{p :p [angle speed] :v} (if (:physics @play-state) (update-physics point) point)
+               hue-nudge (if (:color @play-state) (adjust-hue point points) 0)
+               new-hue (mod (+ hue-nudge (:hue point)) 255)]
            {:p p
-            :v v
-            :hue (mod (+ hue-nudge (:hue point)) 255)
-            :hue-speed (+ (* 0.85 (:hue-speed point)) 
-                          (* 0.15 (Math/abs hue-nudge)))}))
+            :v [angle speed]
+            :hue new-hue
+            :hue-speed (+ (* 0.98 (Math/abs (:hue-speed point))) 
+                          (* 0.02 (Math/abs hue-nudge)))}))
        points))
 
 (defn initial-state []
@@ -154,7 +150,7 @@
   (doseq [point (:points state)]
     (let [{[x y] :p [angle speed] :v hue :hue hue-speed :hue-speed} point]
       (let [r (rescale hue-speed 
-                       0 max-hue-rate
+                       0 (/ max-hue-rate 2)
                        r-min r-max)
             saturation (rescale hue-speed
                                 0 max-hue-rate
